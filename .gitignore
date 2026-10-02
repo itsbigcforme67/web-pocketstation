@@ -1,0 +1,32 @@
+# Never publish personal or copyrighted files.
+
+# Your Wi-Fi name/password and server token (copy config.example.json to config.json and edit that):
+config.json
+
+# BIOS dumps, game ROMs, memory cards, saves:
+*.min
+*.bin
+*.zip
+*.eep
+*.srm
+*.mcd
+*.mcr
+*.gme
+*.mem
+*.vgs
+*.mcs
+*.psx
+roms/
+games/
+saves/
+bios/
+cards/
+
+# build output, editor files, local clutter
+.pio/
+.vscode/
+__pycache__/
+*.pyc
+shots/
+*.wav
+.DS_Store

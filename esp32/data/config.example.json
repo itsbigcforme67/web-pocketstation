@@ -1,0 +1,8 @@
+{
+  "wifi_ssid": "YOUR-WIFI-NAME",
+  "wifi_pass": "YOUR-WIFI-PASSWORD",
+  "server": "http://YOUR-PC-IP:8765",
+  "token": "",
+  "timezone": "EST5EDT,M3.2.0,M11.1.0",
+  "volume": 128
+}

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#1b1d22">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Web PocketStation</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- ============ LIBRARY ============ -->
+  <section id="library" class="view active">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <div>
+          <h1>PocketStation</h1>
+          <p id="sync-status" class="muted">Starting…</p>
+        </div>
+      </div>
+      <button id="btn-menu" class="icon-btn" aria-label="Settings">⋯</button>
+    </header>
+
+    <div id="bios-banner" class="banner hidden">
+      <strong>One-time setup:</strong> load your PocketStation BIOS dump (a 16 KB file, e.g. <code>J110.bin</code>). It stays on this device.
+      <label class="btn primary small">Choose BIOS file<input id="bios-input" type="file" hidden></label>
+    </div>
+
+    <main id="lib-content">
+      <h2 class="section-title">Games</h2>
+      <div id="game-grid" class="game-grid"></div>
+      <p id="no-games" class="empty hidden"><span class="pc-only">No PocketStation games found yet. Download one to a memory card in DuckStation (e.g. Chocobo World in FF8), or import a card / game file below.</span><span class="web-only">No PocketStation games yet. Tap <strong>Import card or game file…</strong> and choose a PlayStation memory card that holds a PocketStation game (<code>.mcd</code>, <code>.mcr</code>, <code>.gme</code>…), or a single game file. It is stored on this device only.</span></p>
+
+      <h2 class="section-title">Memory cards</h2>
+      <div id="card-list" class="card-list"></div>
+
+      <div class="import-row">
+        <label class="btn">Import card or game file…<input id="import-input" type="file" multiple hidden></label>
+      </div>
+    </main>
+  </section>
+
+  <!-- ============ PLAYER ============ -->
+  <section id="player" class="view">
+    <header class="player-bar">
+      <button id="btn-back" class="icon-btn" aria-label="Back to library">‹</button>
+      <div class="player-title">
+        <span id="game-title">—</span>
+        <span id="game-sub" class="muted"></span>
+      </div>
+      <button id="btn-sound" class="icon-btn" aria-label="Sound">🔈</button>
+      <button id="btn-pmenu" class="icon-btn" aria-label="Options">⋯</button>
+    </header>
+
+    <div class="device-wrap">
+      <div class="device" id="device">
+        <div class="device-top">
+          <span class="led" id="led"></span>
+          <span class="logo">PocketStation</span>
+        </div>
+        <div class="screen-bezel">
+          <canvas id="lcd" width="320" height="320" aria-label="PocketStation screen"></canvas>
+        </div>
+        <div class="controls">
+          <div class="dpad" aria-label="Direction buttons">
+            <button class="pbtn up" data-btn="16" aria-label="Up"></button>
+            <button class="pbtn left" data-btn="4" aria-label="Left"></button>
+            <button class="pbtn right" data-btn="2" aria-label="Right"></button>
+            <button class="pbtn down" data-btn="8" aria-label="Down"></button>
+          </div>
+          <button class="pbtn fire" data-btn="1" aria-label="Action button"></button>
+        </div>
+      </div>
+      <p id="unsynced" class="unsynced hidden">Game data changed on this phone. <button id="btn-sync-now" class="link">Send to PC</button></p>
+    </div>
+  </section>
+
+  <!-- ============ SHEETS / DIALOGS ============ -->
+  <div id="sheet" class="sheet hidden" role="dialog" aria-modal="true">
+    <div class="sheet-panel">
+      <h3 id="sheet-title"></h3>
+      <div id="sheet-body"></div>
+      <div id="sheet-actions" class="sheet-actions"></div>
+    </div>
+  </div>
+  <div id="toast" class="toast hidden"></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
