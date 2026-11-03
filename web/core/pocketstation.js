@@ -62,7 +62,7 @@ export class PocketStation {
     this.virtMap = new Int8Array(16).fill(-1);
     this.intInput = 0; this.intHold = 0; this.intMask = 0;
     this.buttons = 0; this.docked = 0;
-    this.comRx = 0; this.comTx = 0xFF; this.comStat2 = 0; this.comAck = false; this.comArmed = false; this.comStat1 = 0;
+    this.comRx = 0; this.comTx = 0xFF; this.comStat2 = 0; this.comAck = false; this.comArmed = false; this.comStat1 = 0; this.comRxFull = false;
     this.timers = [0, 1, 2].map(() => ({ reload: 0, count: 0, mode: 0, acc: 0 }));
     this.clkMode = 0; this.sleeping = false;
     this.lcdMode = 0; this.lcdCal = 0;
@@ -321,8 +321,12 @@ export class PocketStation {
       case 0x0B80000C: return this.rtcDate();
       // COM (memory card port to the PSX; see comByte())
       case 0x0C000000: return this.comMode;
-      case 0x0C000004: return this.comStat1;  // bit1: /SEL went high (transfer ended/aborted)
-      case 0x0C000008: return this.comRx;
+      case 0x0C000004: { // bit0: byte received (cleared by reading COM_DATA), bit1: /SEL went high
+        const v = this.comStat1 | (this.comRxFull ? 1 : 0);
+        if (!v) this.comArmed = true;  // polled while empty = waiting for a byte
+        return v;
+      }
+      case 0x0C000008: this.comRxFull = false; return this.comRx;
       case 0x0C000010: return this.comCtrl1;
       case 0x0C000014: if (!this.comStat2) this.comArmed = true; return this.comStat2; // polled while empty = waiting for a byte
       case 0x0C000018: return this.comCtrl2;
@@ -520,6 +524,7 @@ export class PocketStation {
     const out = (this.comMode & 1) ? this.comTx : 0xFF;
     this.comRx = b & 0xFF;
     this.comStat2 = 1;
+    this.comRxFull = true;
     this.comArmed = false;
     this.comAck = false;
     for (let n = 0; n < maxCycles && !this.comAck;) {
@@ -647,6 +652,7 @@ export class PocketStation {
         fCtrl: this.fCtrl, remapped: this.remapped, fBankFlg: this.fBankFlg, fBankVal: Array.from(this.fBankVal), fWait1: this.fWait1, fWait2: this.fWait2,
         intInput: this.intInput & ~0x1F, intHold: this.intHold, intMask: this.intMask,
         timers: this.timers.map((t) => ({ ...t })), clkMode: this.clkMode, sleeping: this.sleeping,
+        docked: this.docked, comMode: this.comMode, comCtrl1: this.comCtrl1, comCtrl2: this.comCtrl2, comTx: this.comTx, comRx: this.comRx,
         lcdMode: this.lcdMode, lcdCal: this.lcdCal, iopCtrl: this.iopCtrl, iopData: this.iopData,
         dacCtrl: this.dacCtrl, dacData: this.dacData, battCtrl: this.battCtrl, irdaMode: this.irdaMode,
         rtcMode: this.rtc.mode, rtcPhase: this.rtc.phase,
@@ -669,6 +675,8 @@ export class PocketStation {
       intInput: io.intInput, intHold: io.intHold, intMask: io.intMask, clkMode: io.clkMode, sleeping: io.sleeping,
       lcdMode: io.lcdMode, lcdCal: io.lcdCal, iopCtrl: io.iopCtrl, iopData: io.iopData, dacCtrl: io.dacCtrl,
       dacData: io.dacData, battCtrl: io.battCtrl, irdaMode: io.irdaMode,
+      docked: io.docked || 0, comMode: io.comMode || 0, comCtrl1: io.comCtrl1 || 0, comCtrl2: io.comCtrl2 || 0,
+      comTx: io.comTx ?? 0xFF, comRx: io.comRx || 0, comStat1: 0, comStat2: 0, comRxFull: false, comArmed: false, comAck: false,
     });
     this.fBankVal.set(io.fBankVal); this.rebuildVirtMap();
     this.timers = io.timers.map((t) => ({ ...t }));

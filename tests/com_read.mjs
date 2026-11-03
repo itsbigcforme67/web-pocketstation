@@ -22,3 +22,9 @@ console.log('read', hex(rd.slice(0, 12)), '...', hex(rd.slice(-6)), 'len', rd.le
 console.log('id  ', hex(xfer([0x81, 0x53, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])));
 console.log('5a  ', hex(xfer([0x81, 0x5a, ...Array(24).fill(0)])));
 console.log('58  ', hex(xfer([0x81, 0x58, ...Array(12).fill(0)])));
+const data = Array.from({ length: 128 }, (_, i) => (i * 7 + 3) & 255);
+const chk = data.reduce((x, v) => x ^ v, 0x00 ^ 0x3f);
+const wr = xfer([0x81, 0x57, 0, 0, 0x00, 0x3f, ...data, chk, 0, 0, 0]);
+console.log('write', hex(wr.slice(0, 10)), '...', hex(wr.slice(-6)), 'len', wr.length);
+console.log('read3f', hex(xfer([0x81, 0x52, 0, 0, 0, 0x3f, ...Array(140).fill(0)]).slice(8, 20)));
+console.log('flag now', hex(xfer([0x81, 0x52, 0, 0]).slice(0, 2)));
