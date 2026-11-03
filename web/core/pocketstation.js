@@ -14,7 +14,7 @@ export const BTN = { FIRE: 1, RIGHT: 2, LEFT: 4, DOWN: 8, UP: 16 };
 const INT_COM = 1 << 6, INT_T0 = 1 << 7, INT_T1 = 1 << 8, INT_RTC = 1 << 9,
   INT_T2 = 1 << 13;
 const FIQ_MASK = INT_COM | INT_T2;
-const LEVEL_MASK = 0x1F | (1 << 10) | (1 << 11); // buttons, battery, dock: level-sensitive
+const LEVEL_MASK = 0x1F | (1 << 10); // buttons, battery: level-sensitive (dock IRQ-11 is latched on both edges)
 const MAX_CLOCK = 7995392; // CLK_MODE >= 8
 
 function clockFor(mode) {
@@ -62,6 +62,7 @@ export class PocketStation {
     this.virtMap = new Int8Array(16).fill(-1);
     this.intInput = 0; this.intHold = 0; this.intMask = 0;
     this.buttons = 0; this.docked = 0;
+    this.comRx = 0; this.comTx = 0xFF; this.comStat2 = 0; this.comAck = false; this.comArmed = false; this.comStat1 = 0;
     this.timers = [0, 1, 2].map(() => ({ reload: 0, count: 0, mode: 0, acc: 0 }));
     this.clkMode = 0; this.sleeping = false;
     this.lcdMode = 0; this.lcdCal = 0;
@@ -318,12 +319,12 @@ export class PocketStation {
       case 0x0B800000: return this.rtc.mode;
       case 0x0B800008: return this.rtcTime();
       case 0x0B80000C: return this.rtcDate();
-      // COM (memory card port) - not docked
+      // COM (memory card port to the PSX; see comByte())
       case 0x0C000000: return this.comMode;
-      case 0x0C000004: return 0;
-      case 0x0C000008: return 0;
+      case 0x0C000004: return this.comStat1;  // bit1: /SEL went high (transfer ended/aborted)
+      case 0x0C000008: return this.comRx;
       case 0x0C000010: return this.comCtrl1;
-      case 0x0C000014: return 0;
+      case 0x0C000014: if (!this.comStat2) this.comArmed = true; return this.comStat2; // polled while empty = waiting for a byte
       case 0x0C000018: return this.comCtrl2;
       // IrDA
       case 0x0C800000: return this.irdaMode;
@@ -390,9 +391,10 @@ export class PocketStation {
         if (field < 7 && !this.rtc.adjusted) { this.rtcIncrement(field); this.rtc.adjusted = true; }
         return;
       }
-      case 0x0C000000: this.comMode = v; return;
+      case 0x0C000000: if (v & 2) this.comAck = true; this.comMode = v; return;
+      case 0x0C000008: this.comTx = v & 0xFF; return;
       case 0x0C000010: this.comCtrl1 = v; return;
-      case 0x0C000018: this.comCtrl2 = v; return;
+      case 0x0C000018: this.comCtrl2 = v; if (v & 1) this.comStat2 = 0; return; // bit0: ack a received byte / arm
       case 0x0C800000: this.irdaMode = v; return;
       case 0x0D000000: this.lcdMode = v & 0xFF; return;
       case 0x0D000004: this.lcdCal = v; return;
@@ -488,6 +490,49 @@ export class PocketStation {
     const c = Math.ceil(toEdge * this.clock) + 1;
     if (c < best) best = c;
     return Math.max(1, best);
+  }
+
+  // ---------------- docking / memory card port ----------------
+  // Plug into (or pull out of) a PSX memory card slot. INT_INPUT.11 senses the slot's power.
+  dock(on) {
+    on = on ? 1 : 0;
+    if (on === this.docked) return;
+    this.docked = on;
+    this.intInput = on ? (this.intInput | (1 << 11)) : (this.intInput & ~(1 << 11));
+    this.intHold |= 1 << 11;   // the kernel's IRQ-11 handler runs on insertion AND removal
+    this.updateIrq();
+  }
+
+  // One byte of a memory card transfer. `b` is the byte the PSX shifts in; `first` marks the
+  // byte that comes right after /SEL goes low (the FIQ). Returns the byte shifted out at the
+  // same time (whatever the kernel queued in COM_DATA, 0xFF while output is off) with bit 8
+  // set if the kernel then pulled /ACK, i.e. it wants another byte.
+  // The kernel polls for each byte with a short timeout, so we run it until it is polling
+  // COM_STAT2 before shifting the byte in.
+  comByte(b, first = false, maxCycles = 20000) {
+    if (first) { this.comArmed = false; this.comStat1 = 0; this.pulse(INT_COM); }
+    const queued = (this.comMode & 1) ? this.comTx : 0xFF;
+    for (let n = 0; n < maxCycles && !this.comArmed;) {
+      if (this.sleeping) break;
+      const c = this.cpu.run(4); this.tick(c); n += c;
+    }
+    if (!this.comArmed) return queued;  // kernel isn't listening (e.g. the final 47h status byte)
+    const out = (this.comMode & 1) ? this.comTx : 0xFF;
+    this.comRx = b & 0xFF;
+    this.comStat2 = 1;
+    this.comArmed = false;
+    this.comAck = false;
+    for (let n = 0; n < maxCycles && !this.comAck;) {
+      if (this.sleeping) break;
+      const c = this.cpu.run(4); this.tick(c); n += c;
+    }
+    return out | (this.comAck ? 0x100 : 0);
+  }
+
+  // /SEL released: the transfer is over.
+  comEnd() {
+    this.comStat2 = 0; this.comArmed = false; this.comStat1 = 2;
+    for (let n = 0; n < 4000 && !this.sleeping; ) { const c = this.cpu.run(4); this.tick(c); n += c; } // let the kernel wind down
   }
 
   // Run for `seconds` of emulated time (the CPU clock may change while running).
